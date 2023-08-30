@@ -45,14 +45,9 @@ To start training, run:
 
 ```latex
 @inproceedings{Huang2023MSTGAD,
-  author       = {Jun Huang and 
-  				Yang Yang and 
-  				Hang Yu and  
-  				Jianguo Li and 
-  				Xiao Zheng},
+  author       = {Huang, Jun and Yang, Yang and Yu, Hang and Li,Jianguo and Zheng, Xiao},
   title        = {Twin Graph-based Anomaly Detection via Attentive Multi-Modal Learning for Microservice System},
-  booktitle    = {38th {IEEE/ACM} International Conference on Automated Software Engineering,
-                  {ASE} 2023},
+  booktitle    = {38th {IEEE/ACM} International Conference on Automated Software Engineering, {ASE} 2023},
   year         = {2023},
 }
 ```

@@ -16,7 +16,7 @@ Install other dependencies can be installed by:
     pip install -r requirements.txt
 
 ## Dataset
-The MSDS datasets  used in this paper can be downloaded from the [links]([Multi-Source Distributed System Data for AI-powered Analytics | Zenodo](https://zenodo.org/record/3549604))
+The MSDS datasets  used in this paper can be downloaded from the [Multi-Source Distributed System Data for AI-powered Analytics | Zenodo](https://zenodo.org/record/3549604)
 
 The other dataset that we don't have a permission to publish
 

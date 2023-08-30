@@ -54,4 +54,4 @@ To start training, run:
 
 ## Contact
 
-For any questions w.r.t. MSTGAD, please submit them to Github Issues or send the email to young978@ahut.edu.cn.
+For any questions w.r.t. MSTGAD, please submit them to Github Issues .

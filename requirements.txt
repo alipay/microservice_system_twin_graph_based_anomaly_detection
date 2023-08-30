@@ -1,0 +1,10 @@
+adabelief-pytorch==0.2.1
+drain3==0.9.11
+jsonpickle==1.5.1
+matplotlib==3.6.3
+numpy==1.24.1
+pandas==1.5.3
+scikit-learn==1.2.1
+torch==1.12.0+cu113
+torch-geometric==2.2.0
+tqdm==4.64.1

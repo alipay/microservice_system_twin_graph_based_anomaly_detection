@@ -1,20 +1,24 @@
 # **Twin Graph-based Anomaly Detection via Attentive Multi-Modal Learning for Microservice System**
 
-This is the Pytorch implementation of MSTGAD in the ASE paper: 
+This is the Pytorch implementation of MSTGAD in the ASE 2023: *Twin Graph-based Anomaly Detection via Attentive Multi-Modal Learning for Microservice System*
 
-Requirements
+## Environment
+
+The repository has some important dependencies below
 
 * Ubuntu 18.04
 * Python 3.8
 * Pytorch 1.12.0
-* CUDA 11.3
+* Pytorch_geometric == 2.2.0
 
-Dependencies can be installed by:
+Install other dependencies can be installed by:
 
     pip install -r requirements.txt
 
-## Data preparetion
-The datasets (MSDS) used in this paper can be downloaded from the [links]([Multi-Source Distributed System Data for AI-powered Analytics | Zenodo](https://zenodo.org/record/3549604))
+## Dataset
+The MSDS datasets  used in this paper can be downloaded from the [links]([Multi-Source Distributed System Data for AI-powered Analytics | Zenodo](https://zenodo.org/record/3549604))
+
+The other dataset that we don't have a permission to publish
 
 The downloaded datasets can be put in the 'data' directory.  The directory structure looks like:
 
@@ -33,7 +37,9 @@ To start training, run:
 
     python main.py
 
+## Architecture
 
+![fig](./fig.png)
 
 
 

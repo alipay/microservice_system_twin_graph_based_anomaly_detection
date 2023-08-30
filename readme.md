@@ -39,7 +39,24 @@ To start training, run:
 
 ## Architecture
 
-![fig](./fig.png)
+![fig](./Architecture.jpg)
 
+## Citation
 
+```latex
+@inproceedings{Huang2023MSTGAD,
+  author       = {Jun Huang and 
+  				Yang Yang and 
+  				Hang Yu and  
+  				Jianguo Li and 
+  				Xiao Zheng},
+  title        = {Twin Graph-based Anomaly Detection via Attentive Multi-Modal Learning for Microservice System},
+  booktitle    = {38th {IEEE/ACM} International Conference on Automated Software Engineering,
+                  {ASE} 2023},
+  year         = {2023},
+}
+```
 
+## Contact
+
+For any questions w.r.t. MSTGAD, please submit them to Github Issues or send the email to young978@ahut.edu.cn.

@@ -1,6 +1,6 @@
 # **Twin Graph-based Anomaly Detection via Attentive Multi-Modal Learning for Microservice System**
 
-This is the Pytorch implementation of MSTGAD in the ASE 2023: *Twin Graph-based Anomaly Detection via Attentive Multi-Modal Learning for Microservice System*
+This is the Pytorch implementation of MSTGAD in the ASE 2023: *Twin Graph-based Anomaly Detection via Attentive Multi-Modal Learning for Microservice System*. You may refer to our [paper](https://arxiv.org/abs/2310.04701) for more details.
 
 ## Environment
 
@@ -49,6 +49,7 @@ To start training, run:
   title        = {Twin Graph-based Anomaly Detection via Attentive Multi-Modal Learning for Microservice System},
   booktitle    = {38th {IEEE/ACM} International Conference on Automated Software Engineering, {ASE} 2023},
   year         = {2023},
+  page         = {66 - 78},
 }
 ```
 

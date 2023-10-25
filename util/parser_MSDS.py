@@ -19,13 +19,13 @@ parser.add_argument("--learning_change", default=100, type=int,
 parser.add_argument("--learning_gamma", default=0.9, type=float,
                     help='the weight that change learning rate')
 parser.add_argument("--label_weight", default=1e-2, type=float,
-                    help='the unkown weight in regression loss')
+                    help='the unkown weight in reconstruction loss')
 parser.add_argument("--label_percent", default=0.5, type=float,
-                    help='the min weight of rec loss') 
+                    help='the proportion of labeled data') 
 parser.add_argument("--abnormal_weight", default=96, type=int,
                     help='the abnormal weight in classfication loss')
 parser.add_argument("--rec_down", default=1, type=int,
-                    help='the number that change rec_loss weight')
+                    help='the number that changes reconstruction loss weight')
 parser.add_argument("--para_low", default=1e-2, type=float,
                     help='the min weight of rec loss')
 
@@ -33,7 +33,7 @@ parser.add_argument("--para_low", default=1e-2, type=float,
 parser.add_argument("--feature_node", default=4, type=int,
                     help='the pod kpi data number at one epoch')
 parser.add_argument("--feature_edge", default=4, type=int,
-                    help='the edge kpi data number at one epoch')
+                    help='the edge data number at one epoch')
 parser.add_argument("--feature_log", default=16, type=int,
                     help='the log data number at one epoch')
 parser.add_argument("--raw_node", default=3, type=int,

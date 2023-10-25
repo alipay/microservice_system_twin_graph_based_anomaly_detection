@@ -97,33 +97,6 @@ def logparse(miner, rawlog):
         f"{len(miner.drain.clusters)} clusters")
     return templateid_list
 
-def deal_ground(datapath, jsonlist):
-    result = []
-    for name in os.listdir(datapath):
-        
-        namel =  re.split(r'[_.]', name)
-        if namel[-1] != 'json':
-            continue
-            
-        if name not in jsonlist:
-            continue
-
-        with open(os.path.join(datapath, name)) as f:
-            data = json.load(f) 
-
-        data = data['tasks'][0]["subtasks"][0]['workloads'][0]['data']
-        for item in data:
-            timesstamp = item['timestamp']
-            error = 1 if item['error'] else 0
-            duration = item['duration']
-            traceid = item['output']["complete"][0]["data"]["trace_id"]
-            action = (item["atomic_actions"][-1]['name'], item["atomic_actions"][-1]['started_at'], item["atomic_actions"][-1]['finished_at'], 1 if 'failed' in list(item["atomic_actions"][-1].keys()) else 0 )
-            result.append([traceid, timesstamp, duration, error, *action])
-
-    ground = pd.DataFrame(result, columns=['traceid', 'timestamp', 'duration', 'error', 'ac_name', 'ac_start', 'ac_end', 'ac_status'])
-    return ground
-
-
 def readtrace(data, base_trace=None, name='start', isfirst=False):
     if isfirst:        
         pass

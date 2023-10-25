@@ -2,10 +2,9 @@ import hashlib
 import json
 import logging
 import os
+import time
 import pickle
 import random
-import time
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from sklearn.metrics import *
@@ -14,9 +13,6 @@ from util.constant import *
 def calc_index(predict, actual):
     """
     calculate f1 score by predict and actual.
-    Args:
-        predict (np.ndarray): the predict label
-        actual (np.ndarray): np.ndarray
     """
     if predict.dim() != 2:
         predict = predict.reshape(-1, predict.shape[-1])
@@ -42,15 +38,6 @@ def calc_index(predict, actual):
         information = f'pr:{ps:.4f}  rc:{rs:.4f}  auc:{auc:.4f} ap:{ap:.4f} f1: {effection:.4f} pred_right: {pred[0]} pred_wrong:{pred[1]} actu_right: {actu[0]} actu_wrong: {actu[1]}'
     logging.info(information)
     return information, {'pr':ps, 'rc':rs, 'auc':auc, 'ap':ap, 'f1':effection}
-
-
-def draw_change(train, dir):
-    for name, data in train.items():
-        x = np.arange(0, len(data))
-        plt.plot(x, train[name])
-        plt.title(f"{name}")
-        plt.savefig(os.path.join(dir, f'loss_{name}.png'))
-        plt.close('all')
 
 
 def json_pretty_dump(obj, filename):

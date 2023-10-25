@@ -1,6 +1,5 @@
 import time
 import os
-import sys
 import pickle
 import json
 import jsonpickle
@@ -22,12 +21,13 @@ end = '2019-11-25 18:18:13'
 start_dealtime  = time.mktime(time.strptime(start, '%Y-%m-%d %H:%M:%S'))
 end_dealtime  = time.mktime(time.strptime(end, '%Y-%m-%d %H:%M:%S'))
 MSDS_pod = ['wally113','wally117','wally122','wally123','wally124']
-raw_path = './data/MSDS/concurrent_data'
-save_path = './data/MSDS-pre'
-os.makedirs(save_path, exist_ok=True)
+Raw_Path = './data/MSDS/concurrent_data'
+Save_Path = './data/MSDS-pre'
+TRACERESULT = []
+
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 def stamptotime(num):
     return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(num))
@@ -97,17 +97,21 @@ def logparse(miner, rawlog):
         f"{len(miner.drain.clusters)} clusters")
     return templateid_list
 
-def deal_ground(datapath):
+def deal_ground(datapath, jsonlist):
+    result = []
     for name in os.listdir(datapath):
+        
         namel =  re.split(r'[_.]', name)
         if namel[-1] != 'json':
             continue
+            
+        if name not in jsonlist:
+            continue
 
         with open(os.path.join(datapath, name)) as f:
-            data = json.load(f)  # Output: dict
+            data = json.load(f) 
 
         data = data['tasks'][0]["subtasks"][0]['workloads'][0]['data']
-        result = []
         for item in data:
             timesstamp = item['timestamp']
             error = 1 if item['error'] else 0
@@ -136,7 +140,7 @@ def readtrace(data, base_trace=None, name='start', isfirst=False):
             span_end_time = info[end_event]['timestamp']
         except:
             span_end_time = 'wrong'
-        traceresult.append([cmbd_id, span_start_time, span_end_time, spantype, span_id, parentspan_id, base_trace, name])
+        TRACERESULT.append([cmbd_id, span_start_time, span_end_time, spantype, span_id, parentspan_id, base_trace, name])
         name = cmbd_id
 
     if data['children']:
@@ -168,7 +172,7 @@ def deal_kpi(data_path):
         nodename = item.split('_')[0]
         data = pd.read_csv(os.path.join(data_path, item), sep=',')
         data = data.groupby('now').mean()
-        data = data[['cpu.user', 'mem.used', 'load.min1', 'load.min5', 'load.min15']]
+        data = data[['cpu.user', 'mem.used', 'load.min1', 'load.min15', 'load.min5']]
         for name in data.columns.values:
             data[name] = (data[name] - data[name].min()) / (data[name].max() - data[name].min())
         data = data.fillna(0)
@@ -179,26 +183,26 @@ def deal_kpi(data_path):
     result.sort_index(axis=0)
     return result
 
-print('deal metric')
-metric = deal_kpi(os.path.join(raw_path,'metrics'))
+os.makedirs(Save_Path, exist_ok=True)
+logger.info('deal metric')
+metric = deal_kpi(os.path.join(Raw_Path,'metrics'))
 print(metric.head())
 metric.index = metric.index.map(lambda x: x[:-5])
 metric.index = metric.index.map(lambda x: time.mktime(time.strptime(x, '%Y-%m-%d %H:%M:%S')) - 60*60)
 metric = metric.loc[(metric.index >= start_dealtime) & (metric.index <= end_dealtime), :]
-metric.to_csv(os.path.join(save_path, 'metric.csv'), index=True)
+metric.to_csv(os.path.join(Save_Path, 'metric.csv'), index=True)
 
-print('deal log')
-log = deal_log(os.path.join(raw_path, 'logs/logs_aggregated_concurrent.csv'))
-log.to_csv(os.path.join(save_path, 'log.csv'), sep=',', index=False, header=True)
+logger.info('deal log')
+log = deal_log(os.path.join(Raw_Path, 'logs/logs_aggregated_concurrent.csv'))
+log.to_csv(os.path.join(Save_Path, 'log.csv'), sep=',', index=False, header=True)
 
-print('deal trace')
-traceresult = []
-for path, dir_lst, file_lst in os.walk(os.path.join(raw_path, 'traces')):
+logger.info('deal trace')
+for path, dir_lst, file_lst in os.walk(os.path.join(Raw_Path, 'traces')):
     for file_name in tqdm(file_lst):
         data = json.load(open(os.path.join(path, file_name)))
         name = file_name.split('.')[0]
         readtrace(data, base_trace=name, name='start', isfirst=True)
-trace = pd.DataFrame(traceresult, columns=['cmbd_id', 'start_time', 'end_time', 'stats', 'span_id', 'parentspan_id', 'base_trace', 'fatherpod'])
+trace = pd.DataFrame(TRACERESULT, columns=['cmbd_id', 'start_time', 'end_time', 'stats', 'span_id', 'parentspan_id', 'base_trace', 'fatherpod'])
 trace['start_time'], trace['start_sec'] = trace['start_time'].str.split('.').str
 trace['start_time'] = trace['start_time'].map(lambda x: time.mktime(time.strptime(x, '%Y-%m-%dT%H:%M:%S')))
 trace['end_time'].replace('wrong', np.nan, inplace=True)
@@ -206,6 +210,7 @@ trace['end_time'].fillna(method='ffill', inplace=True)
 trace['end_time'], trace['end_sec'] = trace['end_time'].str.split('.').str
 trace['end_time'] = trace['end_time'].map(lambda x: time.mktime(time.strptime(x, '%Y-%m-%dT%H:%M:%S')))
 
+logger.info('deal relation')
 pod_relation = trace.apply(lambda x: '_'.join([x['fatherpod'],x['cmbd_id']]), axis=1)  
 pod_relation = list(set(pod_relation))
 
@@ -216,34 +221,12 @@ for item in pod_relation:
         continue
     relation_matrix[MSDS_pod.index(start), MSDS_pod.index(end)] = 1
     relation_matrix[MSDS_pod.index(end), MSDS_pod.index(start)] = 1
-pickle.dump(relation_matrix, open(os.path.join(save_path, 'trace_path.pkl'), 'wb'))
+pickle.dump(relation_matrix, open(os.path.join(Save_Path, 'trace_path.pkl'), 'wb'))
 
-ground = deal_ground(os.path.join(raw_path, 'reports'))
-ground.to_csv(os.path.join(save_path, 'groundtruth.csv'), index=None)
-label = np.zeros((int((end_dealtime-start_dealtime)+ 1), len(MSDS_pod)))
-#remove unlabel trace
-trace_lack = list(set(trace['base_trace'].unique()).difference(set(ground['traceid'].values)))
-index = []
-for traceid in tqdm(trace_lack):
-    index.extend(trace[(trace.base_trace == traceid)].index.to_list())
-trace = trace.drop(index=list(set(index)))
-
+logger.info('save trace')
 trace[['end_time', 'start_time', 'end_sec', 'start_sec']] = trace[['end_time', 'start_time', 'end_sec', 'start_sec']].apply(pd.to_numeric)
+trace = trace.loc[(trace['end_time'] >= start_dealtime) & (trace['end_time'] <= end_dealtime), :]
 trace['duration'] = trace['end_time'] - trace['start_time'] + (trace['end_sec'] - trace['start_sec']) * 1e-6
-trace_mean = trace.groupby('stats')['duration'].mean()
-trace['duration'] = trace.apply(lambda x: x['duration'] / trace_mean[x['stats']], axis=1)
-trace.to_csv(os.path.join(save_path, 'trace.csv'), index=False)
+trace.to_csv(os.path.join(Save_Path, 'trace.csv'), index=False)
 
-ground = ground.loc[ground['error'] == 1]
-ground[['ac_start', 'ac_end']] = ground[['ac_start', 'ac_end']].apply(pd.to_numeric)
-for _, item in tqdm(ground.iterrows()):
-    trace_data = trace.loc[trace['base_trace'] == item['traceid']]
-    cmbd_list = trace_data['cmbd_id'].unique().tolist()
-    cmbd_index = list(map(lambda x: MSDS_pod.index(x), cmbd_list))
-    time_list = [item for item in range(int(item['ac_start']-start_dealtime), int(item['ac_end']-start_dealtime + 1))]
-    for x in cmbd_index:
-        label[time_list, x] = 1
-pickle.dump(label, open(os.path.join(save_path, 'label.pkl'), 'wb'))
-    
 
-    

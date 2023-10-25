@@ -2,11 +2,11 @@ import logging
 import os
 import time
 import copy
-
 import numpy as np
 import torch
 import torch.nn as nn
 from adabelief_pytorch import AdaBelief
+
 from tqdm import tqdm
 import util.util as util
 
@@ -26,9 +26,7 @@ class Base(nn.Module):
         self.learning_gamma = args['learning_gamma']
         self.rec_down = args['rec_down']
         self.para_low = args['para_low']
-        self.True_list = {'正常': 1, '异常': args['abnormal_weight']}
-
-        self.fea = args['raw_node']
+        self.True_list = {'normal': 1, 'abnormal': args['abnormal_weight']}
 
         if args['evaluate']:
             self.load_model(args['model_path'])
@@ -43,15 +41,13 @@ class Base(nn.Module):
         else:
             logging.info("Using CPU...")
 
-        self.loss_lst = {}
-
-            # 模型初始化
+    # Model init
     def init_weight(self):
         for p in self.model.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-    #  数据放入GPU
+    #  Put Data into GPU/CPU
     def input2device(self, batch_input, use_gpu):
         if isinstance(batch_input, dict):
             if use_gpu:
@@ -75,7 +71,7 @@ class Base(nn.Module):
                 batch_input = torch.tensor(batch_input, dtype=torch.float32, requires_grad=True)
         return batch_input
 
-    # 加载模型参数
+    # Loading modal paras
     def load_model(self, model_save_file="", name='loss'):
         if model_save_file == ' ':
             logging.info(f'No {self.model.name} statue file')
@@ -84,7 +80,7 @@ class Base(nn.Module):
             self.model.load_state_dict(torch.load(
                     os.path.join(model_save_file, f"{self.model.name}_{name}_stage.ckpt")))
 
-    # 保存模型参数
+    # Saving modal paras
     def save_model(self, best_dict, model_save_dir="", name='loss'):
         file_status = os.path.join(model_save_dir, f"{self.model.name}_{name}_stage.ckpt")
         if best_dict['state'] is None:
@@ -102,13 +98,9 @@ class MY(Base):
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, self.learning_change, self.learning_gamma)
 
         best = {"loss":{"score": float("inf"), "state": None, "epoch": 0},
-                "rc":{"score": 0, "state": None, "epoch": 0},
-                "auc":{"score": 0, "state": None, "epoch": 0},
                 "f1":{"score": 0, "state": None, "epoch": 0}}
 
         pre_loss, worse_count, isWrong = float("inf"), 0, False
-
-        self.loss_lst['all'], self.loss_lst['cls'], self.loss_lst['rec'] = [], [], []
 
         label_weight = torch.tensor(
             np.array(list(self.True_list.values())), dtype=torch.float).cuda()
@@ -117,21 +109,20 @@ class MY(Base):
 
         for epoch in range(0, self.epoches):
             lr = optimizer.param_groups[0]['lr']
+            para = torch.tensor(1 / (epoch // self.rec_down + 1))
+            para = para if para > self.para_low else self.para_low
+
             logging.info('-' * 100)
             logging.info(
-                f'{epoch}/{self.epoches} starting... lr: {lr}')
+                f'{epoch}/{self.epoches} starting... lr: {lr} para:{para}')
             self.model.train()
             epoch_cls_loss, epoch_rec_loss, epoch_loss = [], [], []
             epoch_time_start = time.time()
             with tqdm(train_loader) as tbar:
                 for batch_input in tbar:
-                    batch_input['data_node'] = batch_input['data_node'][:, :, :, :self.fea]
                     batch_input = self.input2device(batch_input, self.use_gpu)
                     optimizer.zero_grad()
-                    raw_loss, cls_result, cls_label = self.model(batch_input, withlabel=True)
-
-                    para = torch.tensor(1 / (epoch // self.rec_down + 1))
-                    para = para if para > self.para_low else self.para_low
+                    raw_loss, cls_result, cls_label = self.model(batch_input)
 
                     rec_loss = sum(raw_loss)
                     if cls_result.shape[0] == 0:
@@ -166,11 +157,6 @@ class MY(Base):
                 logging.info("calculate error in epoch {}".format(epoch))
                 break
 
-            # save loss recording ...
-            self.loss_lst['all'].append(epoch_loss)
-            self.loss_lst['rec'].append(epoch_rec_loss)
-            self.loss_lst['cls'].append(epoch_cls_loss)
-
             if epoch_loss <= best["loss"]["score"] or epoch == self.rec_down:
                 worse_count = 0
                 best["loss"]["score"] = epoch_loss
@@ -192,35 +178,26 @@ class MY(Base):
             if epoch > self.rec_down:
                 result = self.evaluate(train_loader)
                 self.evaluate(test_loader)
-                if float(result['rc']) >= best["rc"]["score"]:
-                    best["rc"]["score"] = float(result['rc'])
-                    best["rc"]["state"] = copy.deepcopy(self.model.state_dict())
-                    best["rc"]["epoch"] = epoch
-                if float(result['auc']) >= best["auc"]["score"]:
-                    best["auc"]["score"] = float(result['auc'])
-                    best["auc"]["state"] = copy.deepcopy(self.model.state_dict())
-                    best["auc"]["epoch"] = epoch
                 if float(result['f1']) >= best["f1"]["score"]:
                     best["f1"]["score"] = float(result['f1'])
                     best["f1"]["state"] = copy.deepcopy(self.model.state_dict())
                     best["f1"]["epoch"] = epoch
             scheduler.step()
+
         logging.info('saving model...')
         self.save_model(best['loss'], self.model_save_dir, name='loss')
         self.save_model(best['f1'], self.model_save_dir, name='f1')
-
 
     def evaluate(self, test_loader, isFinall=False):
         self.model.eval()
         with torch.no_grad():
             predict_list, label_list = [], []
             for batch_input in tqdm(test_loader):
-                    batch_input['data_node'] = batch_input['data_node'][:, :, :, :self.fea]
                     batch_input = self.input2device(batch_input,self.use_gpu)
                     raw_result, _ = self.model(batch_input, evaluate=True)
 
-                    predict_list.append(raw_result.reshape(-1, raw_result.shape[-1]))
-                    label_list.append(batch_input['groundtruth_real'].reshape(-1, batch_input['groundtruth_real'].shape[-1]))
+                    predict_list.append(raw_result)
+                    label_list.append(batch_input['groundtruth_real'])
 
             predict_list = torch.concat(predict_list, dim=0).cpu()
             label_list = torch.concat(label_list, dim=0).cpu()

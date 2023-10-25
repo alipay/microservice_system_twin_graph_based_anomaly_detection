@@ -1,7 +1,6 @@
 import argparse
 
-parser = argparse.ArgumentParser(description=' MutliModel Time-Series Anomaly Detection')
-
+parser = argparse.ArgumentParser(description='MutliModel Time-Series Anomaly Detection')
 parser.add_argument("--random_seed", default=42,
                     type=int, help='the random seed')
 
@@ -13,14 +12,16 @@ parser.add_argument("--patience", default=15, type=float,
                     help='the number of epoch that loss is uping')
 parser.add_argument("--learning_rate", default=1e-3,
                     type=float, help='the data number at one epoch')
-parser.add_argument("--weight_decay", default=1e-4, type=float,
+parser.add_argument("--weight_decay", default=5e-4, type=float,
                     help='the one of optimzier parameters which prevent overfitting ')
 parser.add_argument("--learning_change", default=100, type=int,
                     help='the epoch number that change learning rate')
 parser.add_argument("--learning_gamma", default=0.9, type=float,
                     help='the weight that change learning rate')
-parser.add_argument("--label_weight", default=1e-3, type=float,
+parser.add_argument("--label_weight", default=1e-2, type=float,
                     help='the unkown weight in regression loss')
+parser.add_argument("--label_percent", default=0.5, type=float,
+                    help='the min weight of rec loss') 
 parser.add_argument("--abnormal_weight", default=96, type=int,
                     help='the abnormal weight in classfication loss')
 parser.add_argument("--rec_down", default=1, type=int,
@@ -37,7 +38,7 @@ parser.add_argument("--feature_log", default=16, type=int,
                     help='the log data number at one epoch')
 parser.add_argument("--raw_node", default=3, type=int,
                     help='the raw pod kpi data number at one epoch')
-parser.add_argument("--raw_edge", default=4, type=int,
+parser.add_argument("--raw_edge", default=7, type=int,
                     help='the raw edge kpi data number at one epoch')
 parser.add_argument("--log_len", default=256, type=int,
                     help='the log template amount')
@@ -74,11 +75,11 @@ parser.add_argument("--dataset_path", default="./data/MSDS-save",
 parser.add_argument("--result_dir", default="./result",
                     type=str, help='the path of result and log')
 
-parser.add_argument("--main_model", default='my', type=str,
+parser.add_argument("--main_model", default='MSTGAD', type=str,
                     help='switch the model that will run')
 parser.add_argument("--evaluate", default=False, 
                     type=lambda x: x.lower() == "true", help='Evaluate the exist model')
-parser.add_argument("--model_path", default='./result',
+parser.add_argument("--model_path", default=None,
                     type=str, help=' the path of exist model')
 
 args = vars(parser.parse_args())

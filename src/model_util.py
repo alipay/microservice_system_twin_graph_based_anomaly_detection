@@ -5,8 +5,7 @@ from torch.autograd import Variable
 from torch_geometric.nn import GATv2Conv
 from torch_geometric.utils import dense_to_sparse, remove_self_loops
 
-def adj2adj(node_graph, batch_size, window_size, zdim):
-    graph = torch.tensor(node_graph).cuda()
+def adj2adj(graph, batch_size, window_size, zdim):
     graph1 = graph.squeeze(0).squeeze(0).repeat(batch_size, window_size, 1, 1) \
         .reshape(-1, graph.shape[-2], graph.shape[-1])
     adj0, adj1, fea = [], [], []
@@ -26,11 +25,12 @@ def adj2adj(node_graph, batch_size, window_size, zdim):
     return node_adj, node_efea, edge_adj, edge_efea
 
 class FeedForward(nn.Module):
-    def __init__(self, node_embedding_dim, FeedForward_dim):
+    def __init__(self, node_embedding_dim, FeedForward_dim, Dropout):
         super(FeedForward, self).__init__()
         self.ff = nn.Sequential(
             nn.Linear(node_embedding_dim, FeedForward_dim),
             nn.LeakyReLU(inplace=True),
+            nn.Dropout(Dropout),
             nn.Linear(FeedForward_dim, node_embedding_dim)
         )
 
@@ -43,6 +43,7 @@ class AddNorm(nn.Module):
         super(AddNorm, self).__init__()
         self.dropout = nn.Dropout(dropout)
         self.ln = nn.LayerNorm(node_embedding_dim)
+        
 
     def forward(self, X_old, X):
         return self.ln(self.dropout(X) + X_old)
@@ -64,11 +65,11 @@ class AddALL(nn.Module):
 class FFN(nn.Module):
     def __init__(self, node_embedding_dim, edge_embedding_dim, log_embedding_dim, dropout=0.1):
         super(FFN, self).__init__()
-        self.ff_node = FeedForward(node_embedding_dim, node_embedding_dim*2)
+        self.ff_node = FeedForward(node_embedding_dim, node_embedding_dim*4, dropout)
         self.addnorm_node = AddNorm(node_embedding_dim, dropout)
-        self.ff_trace = FeedForward(edge_embedding_dim, edge_embedding_dim*2)
+        self.ff_trace = FeedForward(edge_embedding_dim, edge_embedding_dim*4, dropout)
         self.addnorm_trace = AddNorm(edge_embedding_dim, dropout)
-        self.ff_log = FeedForward(log_embedding_dim, log_embedding_dim*2)
+        self.ff_log = FeedForward(log_embedding_dim, log_embedding_dim*4, dropout)
         self.addnorm_log = AddNorm(log_embedding_dim, dropout)
 
     def forward(self, x_node, x_trace, x_log):
@@ -122,8 +123,6 @@ class Temporal_Attention(nn.Module):
         att_t = att_t.reshape(self.batch_size, -1, att_t.shape[-3], att_t.shape[-2], att_t.shape[-1])
         att_l = att_l.reshape(self.batch_size, -1, att_l.shape[-3], att_l.shape[-2], att_l.shape[-1])
         
-        # att = torch.concat([att_n.mean(axis=[1,2], keepdims=True), att_t.mean(axis=[1,2], keepdims=True), att_l.mean(axis=[1,2], keepdims=True)], dim=1).mean(axis=1, keepdims=True)
-        # att = torch.concat([att_n.mean(axis=[2], keepdims=True), att_t.mean(axis=[2], keepdims=True), att_l.mean(axis=[2], keepdims=True)], dim=1).mean(axis=1, keepdims=True)
         att_nn = torch.matmul(att_n.permute(0, 2, 3, 4, 1), self.trace2pod.T.float()).permute(0, 4, 1, 2, 3)
         att_tn = torch.matmul(att_t.permute(0, 2, 3, 4, 1), self.trace2pod.float()).permute(0, 4, 1, 2, 3)
         att_ln = torch.matmul(att_l.permute(0, 2, 3, 4, 1), self.trace2pod.T.float()).permute(0, 4, 1, 2, 3)

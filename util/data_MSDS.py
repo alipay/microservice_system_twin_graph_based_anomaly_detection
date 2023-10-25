@@ -21,12 +21,14 @@ class Process:
 
         self.window = kwargs['window']
         self.step = kwargs['step']
-        self.dataset = []
-        self.log_len = kwargs['log_len']
-        self.trace_type = []
         self.dataset_path = kwargs['dataset_path']
         self.rawdata_path = kwargs["data_path"]
-        self.set = {}
+
+        self.log_len = kwargs['log_len']
+        self.metric_len = kwargs['raw_node']
+        self.num_node = kwargs['num_nodes']
+        self.percent = kwargs['label_percent']
+        self.set, self.dataset, self.trace_type = {}, [], []
 
         if os.path.exists(self.dataset_path):
             self.read_data()
@@ -38,31 +40,24 @@ class Process:
             self.dataset = self._transform()
             self.save_data()
             
-    # 读取多源数据
+    # reading multidata
     def load_raw(self):
         if not os.path.exists(self.rawdata_path):
             logging.info("Find no data")
         logging.info("LOADing data ...")
-        label = pickle.load(open(os.path.join(self.rawdata_path, 'label.pkl'), 'rb'))
-        label_mask = np.ones(label.shape[0]) *2 
-        need, times = 0, 0  #need anomaly; times normal
-        for idx, item in enumerate(label.sum(axis=1)):
-            if idx < 10:
+        label_raw = pickle.load(open(os.path.join(self.rawdata_path, 'label.pkl'), 'rb'))
+        label = np.eye(2)[label_raw.astype(int)]
+
+        label_mask = label_raw.copy()
+        times = np.zeros((self.num_node, 2))  
+        for idx in range(label.shape[0]):
+            if idx < self.window:
                 continue
-            if item > 0:
-                label_mask[idx] = 1 if times < 10 else 2   #abnormal
-                times += 1
-            else:
-                count = label[idx-self.window + 1:idx +1].sum()
-                if count == 0 and need < 10:   #normal
-                    label_mask[idx] = 0
-                need += 1
-                    
-            if times == 20:
-                times = 0
-            if need == 20:
-                need = 0            
-        
+            times += label[idx]
+            mask = times[label[idx] == 1] %10 >= 10*self.percent
+            label_mask[idx, mask] = 2
+        label_mask = np.eye(3)[label_mask.astype(int)]
+
         metirc = pd.read_csv(os.path.join(self.rawdata_path, 'metric.csv'), sep=',')
         timestart, timeend = metirc['now'].min(), metirc['now'].max()
         time_list = [item for item in range(int(timestart), int(timeend)+1, 1)]
@@ -72,7 +67,7 @@ class Process:
         metirc = metirc.sort_values(by='now', ascending=True)
         metirc.fillna(method='ffill', inplace=True)
         name_list = list(filter(lambda x: 'mem' in x, list(metirc.columns)))
-        after_name = list(map(lambda x: f'{x.split("_")[0]}_a{x.split("_")[-1]})',name_list))
+        after_name = list(map(lambda x: f'{x.split("_")[0]}_a{x.split("_")[-1]}',name_list))
         name_dict = {name_list[idx]: after_name[idx] for idx, _ in enumerate(name_list)}
         metirc.rename(columns = name_dict,  inplace=True)
 
@@ -102,9 +97,15 @@ class Process:
         for name, item in log_record.items():
             log_record[name] = (item - min_record) / dis
 
-        trace = pd.read_csv(os.path.join(self.rawdata_path, 'trace.csv'), sep=',')
-        trace = trace.sort_values(by='end_time', ascending=True)
-        self.trace_type.extend(trace['stats'].unique().tolist())
+        trace_raw = pd.read_csv(os.path.join(self.rawdata_path, 'trace.csv'), sep=',')
+        trace_raw = trace_raw.sort_values(by='end_time', ascending=True)
+        self.trace_type.extend(trace_raw['stats'].unique().tolist())
+        trace_a = np.zeros((len(MSDS_pod), len(MSDS_pod), len(self.trace_type), len(time_list)))
+        for name, item in trace_raw.groupby(['cmbd_id', 'fatherpod', 'stats', 'end_time']):
+            if name[0] not in MSDS_pod or name[1] not in MSDS_pod or name[3] > timeend:
+                    continue
+            trace_a[MSDS_pod.index(name[0]), MSDS_pod.index(name[1]), self.trace_type.index(name[2]), int(name[3]-timestart)] = item['duration'].sum()
+        trace = trace_a.transpose(3, 0, 1, 2) / (trace_a.mean(axis=-1)*10 + 1e-6)
 
         self.set['metric'] = metirc
         self.set['log'] = log_record
@@ -112,7 +113,7 @@ class Process:
         self.set['label'] = label
         self.set['mask'] = label_mask
 
-    # 读取已经存在的数据
+    # read data after dealing
     def read_data(self):
         logging.info("read Tranform data")
         if not os.path.exists(self.dataset_path):
@@ -126,7 +127,7 @@ class Process:
             data = pickle.load(open(os.path.join(self.dataset_path, file), 'rb'))
             self.dataset.append(data)
 
-    # 保存已经存在的数据
+    # saving data
     def save_data(self):
         logging.info("save Tranform data")
         if not os.path.exists(self.dataset_path):
@@ -136,7 +137,7 @@ class Process:
                 del item['name']
                 pickle.dump(item, f)
 
-    # 把读取的数据依据滑动窗口切分
+    # split to sliding windows
     def _transform(self):
         self.trace_type = list(set(self.trace_type))
         num = 0
@@ -153,7 +154,6 @@ class Process:
 
         metirc.sort_index(axis=1, ascending=True, inplace=True)
         
-        # Sliding window
         while starttime + (self.window - 1) * self.step <= endtime:
             record = {}
             if num % 500 == 0:
@@ -165,7 +165,7 @@ class Process:
             select_metirc = select_metirc.values
             select_metirc = select_metirc.reshape(self.window, 5, -1)
             assert select_metirc.shape == (self.window, len(MSDS_pod), 5), f"Worng kpi"
-            record['data_node'] = select_metirc
+            record['data_node'] = select_metirc[:, :, :self.metric_len]
 
             # log
             log_record = np.stack([log[time] for time in range(int(starttime), int(starttime + (self.window - 1) * self.step + 1), self.step)], axis=0)
@@ -173,36 +173,20 @@ class Process:
             assert log_record.shape == (self.window, len(MSDS_pod), self.log_len), f"Worng log"
 
             #label
-            select_label_pod = label[num + self.window - 1, :]
-            select_mask = label_mask[num + self.window - 1]
-            if select_mask == 2:
-                result = np.ones_like(select_label_pod) * 2   #unknown
-            else:
-                result = select_label_pod
+            select_label = label[num + self.window - 1, :]
+            select_mask = label_mask[num + self.window - 1, :]
 
-            record['groundtruth_cls'] = np.eye(3)[result.astype(int)]
-            record['groundtruth_real'] = np.eye(2)[select_label_pod.astype(int)]
+            record['groundtruth_cls'] = select_mask
+            record['groundtruth_real'] = select_label
             count1 += 1 if record['groundtruth_cls'].sum(axis=0)[1] > 0 else 0
             count2 += 1 if record['groundtruth_real'].sum(axis=0)[1] > 0 else 0
             assert record['groundtruth_cls'].shape == (len(MSDS_pod), 3), f"Worng label"    
 
             # trace
-            select_trace = trace[(trace['end_time'] >= starttime) & ( trace['end_time'] <= starttime + (self.window - 1) * self.step)]
-            A = np.zeros((len(MSDS_pod), len(MSDS_pod), len(self.trace_type),self.window))
-            for name, item in select_trace.groupby(['cmbd_id', 'fatherpod', 'stats']):
-                if name[0] not in MSDS_pod or name[1] not in MSDS_pod:
-                    continue
-                time = {starttime + k * self.step: 0 for k in range(self.window)}
-                for timestamp, record_data in item.groupby('end_time'):
-                    time[timestamp] = record_data['duration'].sum()
-
-                A[MSDS_pod.index(name[1])][MSDS_pod.index(name[0])][self.trace_type.index(name[2])] = np.array(list(time.values()))
-                A[MSDS_pod.index(name[0])][MSDS_pod.index(name[1])][self.trace_type.index(name[2])] = np.array(list(time.values()))
-            
-            A = A.transpose(3, 0, 1, 2)
-            count3 += 1 if A.sum() > 0 else 0
-            assert A.shape == (self.window, len(MSDS_pod), len(MSDS_pod), len(self.trace_type)), f"Worng Trace"
-            record['data_edge'] = A
+            select_trace = trace[num : num + self.window]
+            count3 += 1 if select_trace.sum() > 0 else 0
+            assert select_trace.shape == (self.window, len(MSDS_pod), len(MSDS_pod), len(self.trace_type)), f"Worng Trace"
+            record['data_edge'] = select_trace
             record['name'] = f'{num}'
             num += 1
             data_list.append(record)
